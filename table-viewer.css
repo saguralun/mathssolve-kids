@@ -306,6 +306,10 @@ button {
   line-height: 1.5;
 }
 
+.message-panel[hidden] {
+  display: none;
+}
+
 .message-panel.error {
   color: #b42318;
 }

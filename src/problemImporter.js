@@ -5,6 +5,10 @@
   var importForm = document.getElementById("problemImportForm");
   var addPartButton = document.getElementById("addPartButton");
   var addVariantSetButton = document.getElementById("addVariantSetButton");
+  var bulkPasteInput = document.getElementById("bulkPasteInput");
+  var bulkPasteButton = document.getElementById("bulkPasteButton");
+  var templatePasteInput = document.getElementById("templatePasteInput");
+  var templatePasteButton = document.getElementById("templatePasteButton");
   var resetFormButton = document.getElementById("resetFormButton");
   var submitButton = document.getElementById("submitButton");
   var resultMessage = document.getElementById("resultMessage");
@@ -169,6 +173,9 @@
     addVariantSetButton.addEventListener("click", function () {
       addVariantSet();
     });
+
+    bulkPasteButton.addEventListener("click", handleBulkPaste);
+    templatePasteButton.addEventListener("click", handleTemplatePaste);
 
     resetFormButton.addEventListener("click", function () {
       state = createBlankState();
@@ -472,6 +479,164 @@
     renderVariableTable();
     refreshGeneratedOutput();
     setResult("เพิ่มช่องชุดตัวเลขใหม่แล้ว", "");
+  }
+
+  function handleTemplatePaste() {
+    var parts;
+
+    try {
+      parts = parseTemplateText(templatePasteInput.value);
+    } catch (error) {
+      setResult(error.message, "error");
+      return;
+    }
+
+    state.parts = parts;
+    state.answer = { values: createBlankValues() };
+    state.activeVariantCount = defaultVariantCount;
+    state.activeSet = 0;
+    renderAll();
+    setResult(
+      "แบ่ง part จากโจทย์แม่ที่วางแล้ว " + parts.length + " ส่วน — พิมพ์เองหรือวาง JSON เติมชุดตัวเลขต่อได้เลย",
+      "success"
+    );
+  }
+
+  // Splits a full template string on {math1}, {math2}, ... tokens into the
+  // same part shape the manual "ตัวต่อโจทย์" builder uses: text-before-token
+  // per variable part, plus one extra trailing part (no variable) for any
+  // text left after the last token — e.g. "...มีค่าเท่ากับเท่าไร".
+  function parseTemplateText(text) {
+    var raw = String(text || "");
+
+    if (!raw.trim()) {
+      throw new Error("วางข้อความโจทย์แม่ก่อน");
+    }
+
+    var tokenPattern = /\{math\d+\}/g;
+    var segments = raw.split(tokenPattern);
+    var tokenCount = segments.length - 1;
+
+    if (tokenCount === 0) {
+      return [{ text: raw, values: createBlankValues() }];
+    }
+
+    var parts = [];
+    for (var index = 0; index < tokenCount; index += 1) {
+      parts.push({ text: segments[index], values: createBlankValues() });
+    }
+
+    var trailingText = segments[tokenCount];
+    if (trailingText && trailingText.trim() !== "") {
+      parts.push({ text: trailingText, values: createBlankValues() });
+    }
+
+    return parts;
+  }
+
+  function handleBulkPaste() {
+    var objects;
+
+    try {
+      objects = parseBulkPasteText(bulkPasteInput.value);
+    } catch (error) {
+      setResult(error.message, "error");
+      return;
+    }
+
+    applyBulkPasteVariants(objects);
+    renderAll();
+    setResult(
+      "เติมค่าอัตโนมัติจาก " + objects.length + " variant แล้ว — อย่าลืมกรอกข้อความ part (ประโยคโจทย์) ให้ครบด้วย",
+      "success"
+    );
+  }
+
+  // Accepts one or more lines like: variant 1: {"math1":"3:5",...} — the
+  // "variant N:" label is optional, only the {...} JSON object matters. Uses
+  // a flat-object regex (no nested braces) since variant_values are always
+  // string key/value pairs.
+  function parseBulkPasteText(text) {
+    var matches = String(text || "").match(/\{[^{}]*\}/g) || [];
+
+    if (!matches.length) {
+      throw new Error("หาไม่เจอ JSON object ({...}) ในข้อความที่วาง");
+    }
+
+    if (matches.length > maxVariantCount) {
+      throw new Error("วางได้สูงสุด " + maxVariantCount + " ชุด (เจอ " + matches.length + " ชุด)");
+    }
+
+    return matches.map(function (chunk, index) {
+      try {
+        var parsed = JSON.parse(chunk);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("ไม่ใช่ JSON object");
+        }
+        return parsed;
+      } catch (error) {
+        throw new Error("อ่าน JSON ชุดที่ " + (index + 1) + " ไม่สำเร็จ: " + error.message);
+      }
+    });
+  }
+
+  function applyBulkPasteVariants(objects) {
+    var count = objects.length;
+    var mathKeys = [];
+
+    objects.forEach(function (obj) {
+      Object.keys(obj).forEach(function (key) {
+        if (key !== "answer" && mathKeys.indexOf(key) === -1) {
+          mathKeys.push(key);
+        }
+      });
+    });
+
+    mathKeys.sort(function (a, b) {
+      var aNumber = Number(String(a).replace(/[^0-9]/g, ""));
+      var bNumber = Number(String(b).replace(/[^0-9]/g, ""));
+
+      if (Number.isFinite(aNumber) && Number.isFinite(bNumber) && aNumber !== bNumber) {
+        return aNumber - bNumber;
+      }
+      return 0;
+    });
+
+    // Keep any sentence text already typed into existing parts, matched by
+    // position, so pasting new numbers doesn't wipe out the wording.
+    var previousTexts = state.parts.map(function (part) {
+      return part.text;
+    });
+
+    var newParts = mathKeys.map(function (key, index) {
+      return {
+        text: previousTexts[index] || "",
+        values: createBlankValues()
+      };
+    });
+
+    // Anything after the last variable part (e.g. a trailing "มีค่าเท่ากับ
+    // เท่าไร" part with no variable, from "แบ่ง part อัตโนมัติ") has no
+    // matching key in the pasted JSON — carry it over as-is instead of
+    // dropping it, so pasting values after pasting the template text doesn't
+    // eat the end of the sentence.
+    for (var index = mathKeys.length; index < state.parts.length; index += 1) {
+      newParts.push({ text: state.parts[index].text, values: createBlankValues() });
+    }
+
+    state.parts = newParts;
+    state.answer = { values: createBlankValues() };
+    state.activeVariantCount = Math.max(1, count);
+    state.activeSet = 0;
+
+    objects.forEach(function (obj, setIndex) {
+      mathKeys.forEach(function (key, partIndex) {
+        state.parts[partIndex].values[setIndex] =
+          obj[key] === undefined || obj[key] === null ? "" : String(obj[key]);
+      });
+      state.answer.values[setIndex] =
+        obj.answer === undefined || obj.answer === null ? "" : String(obj.answer);
+    });
   }
 
   function refreshGeneratedOutput() {

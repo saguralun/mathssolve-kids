@@ -480,8 +480,8 @@ function runPsql(connection, sql) {
     "ON_ERROR_STOP=1",
     "-t",
     "-A",
-    "-c",
-    sql
+    "-f",
+    "-"
   ];
 
   const env = {
@@ -494,7 +494,12 @@ function runPsql(connection, sql) {
   }
 
   return new Promise((resolve, reject) => {
-    execFile(psqlPath, args, { env, timeout: 15000, windowsHide: true }, (error, stdout, stderr) => {
+    // SQL is fed over stdin (via "-f -") instead of as a "-c" command-line
+    // argument. Windows rewrites non-ASCII command-line arguments through the
+    // system codepage before the child process sees them, which corrupts
+    // Thai text (e.g. "invalid byte sequence for encoding UTF8"). Writing to
+    // stdin as a UTF-8 buffer bypasses that conversion entirely.
+    const child = execFile(psqlPath, args, { env, timeout: 15000, windowsHide: true }, (error, stdout, stderr) => {
       if (error) {
         const detail = String(stderr || error.message || "").trim();
         reject(new Error(detail || "เชื่อมต่อ PostgreSQL ไม่สำเร็จ"));
@@ -503,6 +508,8 @@ function runPsql(connection, sql) {
 
       resolve(String(stdout || "").trim() || "null");
     });
+
+    child.stdin.end(Buffer.from(sql, "utf8"));
   });
 }
 

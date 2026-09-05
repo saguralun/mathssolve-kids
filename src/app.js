@@ -331,7 +331,7 @@
     if (!Number.isFinite(number)) {
       return 3;
     }
-    return Math.max(1, Math.min(10, number));
+    return Math.max(1, Math.min(5, number));
   }
 
   function normalizeProblemCount(count) {
@@ -340,10 +340,10 @@
   }
 
   function generatorLevelForLearningLevel(level) {
-    if (level <= 3) {
+    if (level <= 2) {
       return "easy";
     }
-    if (level >= 8) {
+    if (level >= 4) {
       return "challenge";
     }
     return "normal";

@@ -325,6 +325,25 @@ textarea:focus {
   margin-top: 12px;
 }
 
+.bulk-paste-block {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px;
+  border: 1px dashed #c4cede;
+  border-radius: 10px;
+  background: #f7f9fc;
+}
+
+.bulk-paste-block textarea {
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.85rem;
+}
+
+.bulk-paste-block .secondary-button {
+  justify-self: start;
+}
+
 .variant-tabs {
   display: flex;
   flex-wrap: wrap;

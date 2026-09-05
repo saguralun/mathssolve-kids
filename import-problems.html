@@ -60,6 +60,15 @@
               <button class="secondary-button" id="addPartButton" type="button">+ เพิ่ม part</button>
             </div>
 
+            <div class="bulk-paste-block">
+              <label>
+                <span>วางโจทย์แม่เต็มข้อความ (มี {math1} {math2} ...) เพื่อแบ่ง part อัตโนมัติ</span>
+                <textarea id="templatePasteInput" rows="3" placeholder="อาคารอเนกประสงค์...เป็น {math1} และ...เป็น {math2} ถ้า...แล้ว {math3} มีค่าเท่ากับเท่าไร"></textarea>
+              </label>
+              <button class="secondary-button" id="templatePasteButton" type="button">แบ่ง part อัตโนมัติ</button>
+              <p class="field-note">ตัดข้อความตรง {mathN} ให้เป็น part ให้เอง ข้อความท้ายสุดหลังตัวแปรตัวสุดท้ายจะถูกเก็บเป็น part เพิ่มแบบไม่มีตัวแปร — วางโจทย์แม่นี้ก่อน แล้วค่อยวาง/กรอกชุดตัวเลขทีหลัง</p>
+            </div>
+
             <div class="parts-list" id="partsList"></div>
 
             <div class="template-preview-block">
@@ -81,6 +90,15 @@
                 <h2 id="variablesHeading">ตัวแปรและชุดตัวเลข</h2>
               </div>
               <button class="secondary-button" id="addVariantSetButton" type="button">+ เพิ่มชุดตัวเลข</button>
+            </div>
+
+            <div class="bulk-paste-block">
+              <label>
+                <span>วาง variant เป็น JSON เพื่อเติมอัตโนมัติ</span>
+                <textarea id="bulkPasteInput" rows="4" placeholder='variant 1: {"math1":"3:5","math2":"8:11","math3":"A + B + C","answer":"128"}'></textarea>
+              </label>
+              <button class="secondary-button" id="bulkPasteButton" type="button">เติมอัตโนมัติจาก JSON</button>
+              <p class="field-note" id="bulkPasteNote">วางได้หลายบรรทัด ระบบจะสร้างช่องตัวแปรและจำนวนชุดให้เองตามคีย์ที่เจอ (ยกเว้น answer) เหลือแค่กรอกข้อความ part เอง</p>
             </div>
 
             <div class="variant-tabs" id="variantTabs" aria-label="เลือกชุดตัวเลข"></div>

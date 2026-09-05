@@ -86,6 +86,10 @@ button {
   overflow: hidden;
 }
 
+.setup-screen[hidden] {
+  display: none;
+}
+
 .setup-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
