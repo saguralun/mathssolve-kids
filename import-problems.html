@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Import Problems - MathsSolve</title>
+    <link rel="stylesheet" href="import-problems.css" />
+  </head>
+  <body>
+    <main class="import-shell">
+      <header class="import-topbar">
+        <div>
+          <p>MathsSolve Admin</p>
+          <h1>Import โจทย์</h1>
+        </div>
+        <nav class="admin-nav" aria-label="admin navigation">
+          <a href="/">หน้าทำโจทย์</a>
+          <a href="/tables.html">ดู Table</a>
+        </nav>
+      </header>
+
+      <section class="notice info" id="connectionNotice" role="status">
+        กำลังอ่านรายการเรื่องและระดับความยากจาก PostgreSQL...
+      </section>
+
+      <form class="problem-form" id="problemImportForm">
+        <section class="panel basics-panel" aria-labelledby="basicsHeading">
+          <div class="panel-heading">
+            <div>
+              <p>ข้อมูลหลัก</p>
+              <h2 id="basicsHeading">เรื่องและรหัสโจทย์</h2>
+            </div>
+          </div>
+
+          <div class="form-grid three-columns">
+            <label>
+              <span>เรื่อง</span>
+              <select id="topicSelect" name="topicCode" required></select>
+            </label>
+            <label>
+              <span>ระดับความยาก</span>
+              <select id="levelSelect" name="levelId" required></select>
+            </label>
+            <label>
+              <span>รหัสโจทย์แม่ auto</span>
+              <input id="templateCodeInput" name="templateCode" autocomplete="off" readonly required />
+            </label>
+          </div>
+
+          <p class="field-note" id="topicDetail">เลือกเรื่องเพื่อจัดกลุ่มโจทย์</p>
+        </section>
+
+        <div class="import-grid">
+          <section class="panel parts-panel" aria-labelledby="partsHeading">
+            <div class="panel-heading">
+              <div>
+                <p>Pattern</p>
+                <h2 id="partsHeading">ตัวต่อโจทย์</h2>
+              </div>
+              <button class="secondary-button" id="addPartButton" type="button">+ เพิ่ม part</button>
+            </div>
+
+            <div class="parts-list" id="partsList"></div>
+
+            <div class="template-preview-block">
+              <label>
+                <span>โจทย์แม่ที่จะบันทึก</span>
+                <textarea id="promptTemplatePreview" rows="4" readonly></textarea>
+              </label>
+              <label>
+                <span>โจทย์จริงชุดปัจจุบัน</span>
+                <textarea id="currentPromptPreview" rows="4" readonly></textarea>
+              </label>
+            </div>
+          </section>
+
+          <section class="panel variables-panel" aria-labelledby="variablesHeading">
+            <div class="panel-heading">
+              <div>
+                <p>Variables</p>
+                <h2 id="variablesHeading">ตัวแปรและชุดตัวเลข</h2>
+              </div>
+              <button class="secondary-button" id="addVariantSetButton" type="button">+ เพิ่มชุดตัวเลข</button>
+            </div>
+
+            <div class="variant-tabs" id="variantTabs" aria-label="เลือกชุดตัวเลข"></div>
+
+            <div class="variable-table-frame">
+              <table class="variable-table">
+                <thead id="variableTableHead"></thead>
+                <tbody id="variableTableBody"></tbody>
+              </table>
+            </div>
+
+          </section>
+        </div>
+
+        <section class="panel preview-panel" aria-labelledby="generatedHeading">
+          <div class="panel-heading">
+            <div>
+              <p>Generated</p>
+              <h2 id="generatedHeading">โจทย์ที่จะ import</h2>
+            </div>
+          </div>
+          <div class="generated-list" id="generatedList"></div>
+        </section>
+
+        <section class="panel sql-panel" aria-labelledby="sqlHeading">
+          <div class="panel-heading">
+            <div>
+              <p>SQL</p>
+              <h2 id="sqlHeading">SQL ที่จะได้</h2>
+            </div>
+          </div>
+          <pre id="sqlPreview"></pre>
+        </section>
+
+        <footer class="import-actions">
+          <div class="result-message" id="resultMessage" role="status">
+            กรอกโจทย์แล้วกด Import เข้า DB เมื่อพร้อม
+          </div>
+          <div class="action-buttons">
+            <button class="secondary-button" id="resetFormButton" type="button">ล้างฟอร์ม</button>
+            <button class="primary-button" id="submitButton" type="submit">Import เข้า DB</button>
+          </div>
+        </footer>
+      </form>
+    </main>
+
+    <script src="src/problemImporter.js"></script>
+  </body>
+</html>

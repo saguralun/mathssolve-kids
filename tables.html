@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MathsSolve Tables</title>
+    <link rel="stylesheet" href="table-viewer.css" />
+  </head>
+  <body>
+    <main class="table-viewer-shell">
+      <aside class="viewer-sidebar" aria-label="ตารางในฐานข้อมูล">
+        <header class="viewer-brand">
+          <p>MathsSolve</p>
+          <h1>Table Viewer</h1>
+        </header>
+
+        <nav class="viewer-links" aria-label="admin pages">
+          <a href="/import-problems.html">Import โจทย์</a>
+          <a href="/">หน้าทำโจทย์</a>
+        </nav>
+
+        <section class="connection-summary" aria-label="การเชื่อมต่อฐานข้อมูล">
+          <span>Connection</span>
+          <strong id="connectionSummaryText">กำลังอ่าน .env...</strong>
+        </section>
+
+        <div class="table-list-header">
+          <span>Tables</span>
+          <button class="icon-button" id="refreshTablesButton" type="button" title="โหลดใหม่" aria-label="โหลดรายชื่อตารางใหม่">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M20 12a8 8 0 1 1-2.34-5.66" />
+              <path d="M20 4v6h-6" />
+            </svg>
+          </button>
+        </div>
+        <nav class="table-list" id="tableList" aria-label="เลือกตาราง"></nav>
+      </aside>
+
+      <section class="viewer-main" aria-live="polite">
+        <header class="viewer-toolbar">
+          <div>
+            <p class="toolbar-kicker" id="connectionStatus">เชื่อมต่ออัตโนมัติจาก .env</p>
+            <h2 id="tableTitle">เลือกตารางเพื่อดูข้อมูล</h2>
+          </div>
+          <div class="toolbar-actions">
+            <label class="limit-field">
+              <span>Rows</span>
+              <select id="rowLimitSelect">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+                <option value="200">200</option>
+              </select>
+            </label>
+            <button class="secondary-button" id="reloadTableButton" type="button">โหลดข้อมูล</button>
+          </div>
+        </header>
+
+        <section class="summary-strip" id="summaryStrip" aria-label="สรุปตาราง"></section>
+        <div class="message-panel" id="messagePanel">
+          กำลังโหลด table จาก PostgreSQL ตามค่าที่ตั้งไว้ใน .env
+        </div>
+        <div class="data-frame" id="dataFrame" hidden>
+          <table id="dataTable"></table>
+        </div>
+      </section>
+    </main>
+
+    <script src="src/tableViewer.js"></script>
+  </body>
+</html>
