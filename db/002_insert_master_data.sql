@@ -59,4 +59,13 @@ ON CONFLICT (code) DO UPDATE SET
   sort_order = EXCLUDED.sort_order,
   is_active = TRUE;
 
+INSERT INTO problem_hints (code, hint_text, sort_order)
+VALUES
+  ('pi_22_7', 'กำหนดให้ π ≈ 22/7', 1),
+  ('pi_3_14', 'กำหนดให้ π ≈ 3.14', 2)
+ON CONFLICT (code) DO UPDATE SET
+  hint_text = EXCLUDED.hint_text,
+  sort_order = EXCLUDED.sort_order,
+  is_active = TRUE;
+
 COMMIT;

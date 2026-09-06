@@ -48,6 +48,27 @@
           </div>
 
           <p class="field-note" id="topicDetail">เลือกเรื่องเพื่อจัดกลุ่มโจทย์</p>
+
+          <div class="form-grid two-columns source-row">
+            <label>
+              <span>แหล่งที่มา (ไม่บังคับ)</span>
+              <input id="sourceInput" name="sourceName" list="sourceOptions" autocomplete="off" placeholder="เช่น TEDET, สสวท, สอวน., ชื่อโรงเรียน..." />
+              <datalist id="sourceOptions"></datalist>
+            </label>
+            <label>
+              <span>ทศนิยมของคำตอบ (ตำแหน่ง)</span>
+              <input id="answerDecimalPlacesInput" name="answerDecimalPlaces" type="number" min="0" max="4" value="0" />
+            </label>
+          </div>
+          <p class="field-note">0 = คำตอบเป็นจำนวนเต็ม (ค่าเริ่มต้น) — ใส่ 1 ถ้าคำตอบมีทศนิยม 1 ตำแหน่ง เช่น 9408 กับทศนิยม 1 ตำแหน่งจะแสดงเป็น 940.8 ในช่องตอบ 5 หลัก</p>
+
+          <div class="hints-row">
+            <label>
+              <span>Hint ท้ายโจทย์ (ไม่บังคับ)</span>
+              <select id="hintSelect"></select>
+            </label>
+            <p class="field-note">เลือกแล้วระบบจะเติมข้อความนี้ต่อท้ายโจทย์ให้เองตอนแสดงผล ไม่ต้องพิมพ์ลงในโจทย์แม่</p>
+          </div>
         </section>
 
         <div class="import-grid">

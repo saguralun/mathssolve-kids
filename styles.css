@@ -642,6 +642,7 @@ canvas:focus {
   font-weight: 750;
   line-height: 1.42;
   text-wrap: pretty;
+  white-space: pre-line;
 }
 
 .scratch-paper {
@@ -678,15 +679,28 @@ canvas:focus {
 }
 
 .answer-display {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
+  align-items: center;
   gap: clamp(4px, 0.7vw, 7px);
   padding: 0 4px;
+}
+
+.answer-decimal-point {
+  display: grid;
+  place-items: end center;
+  min-width: 6px;
+  height: 30px;
+  padding-bottom: 2px;
+  color: #111827;
+  font-size: 1.3rem;
+  font-weight: 900;
+  line-height: 1;
 }
 
 .answer-slot {
   display: grid;
   place-items: center;
+  flex: 1 1 0;
   min-width: 0;
   height: 30px;
   border: 1px solid #aebbd0;

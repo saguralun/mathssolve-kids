@@ -4,6 +4,7 @@ BEGIN;
 -- Use this project only while the database is still in early development.
 DROP TABLE IF EXISTS problem_variants CASCADE;
 DROP TABLE IF EXISTS problem_templates CASCADE;
+DROP TABLE IF EXISTS problem_hints CASCADE;
 DROP TABLE IF EXISTS levels CASCADE;
 DROP TABLE IF EXISTS topics CASCADE;
 DROP TABLE IF EXISTS math_problem_variants CASCADE;
@@ -43,6 +44,21 @@ CREATE TABLE IF NOT EXISTS levels (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ระบบ "hint" ทั่วไปที่กำกับท้ายโจทย์อัตโนมัติ เช่น "กำหนดให้ π ≈ 22/7"
+-- ทำเป็น master table เพราะในอนาคตอาจมี hint แบบอื่นเพิ่มได้อีก (ไม่ใช่แค่ pi)
+-- โดยไม่ต้องเปิดคอลัมน์ใหม่ทุกครั้ง — ผูกกับ problem_templates ด้วย FK เดียว
+-- (hint_id) ไม่ใช่ join table แบบ many-to-many เพราะโจทย์ข้อหนึ่งต้องการ hint
+-- แนวนี้ทีละอันพอ (เลือก 22/7 หรือ 3.14 อย่างใดอย่างหนึ่ง) เหมือน topic_id/level_id
+CREATE TABLE IF NOT EXISTS problem_hints (
+  id SMALLINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  hint_text TEXT NOT NULL,
+  sort_order SMALLINT NOT NULL DEFAULT 0,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS problem_templates (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   code TEXT NOT NULL UNIQUE,
@@ -50,6 +66,16 @@ CREATE TABLE IF NOT EXISTS problem_templates (
   level_id SMALLINT NOT NULL REFERENCES levels(id),
   prompt_template_th TEXT NOT NULL,
   solution_th TEXT NOT NULL DEFAULT '',
+  -- แหล่งที่มาโจทย์ เช่น TEDET, สสวท, ชื่อโรงเรียน — ข้อความอิสระ ไม่บังคับ
+  -- ไม่มี master table แยก เพราะแหล่งที่มามีเยอะและเปิดกว้างเกินจะเลี้ยงเป็น
+  -- รายการตายตัว (ต่างจาก problem_hints ที่เป็นรายการควบคุมได้)
+  source_name TEXT,
+  -- 0 = คำตอบเป็นจำนวนเต็ม (ค่าเริ่มต้น) 1-4 = เลื่อนจุดทศนิยมเข้ามาจากขวา
+  -- กี่ตำแหน่งตอนแสดงช่องตอบ 5 หลักในหน้าเล่นโจทย์
+  answer_decimal_places SMALLINT NOT NULL DEFAULT 0
+    CHECK (answer_decimal_places BETWEEN 0 AND 4),
+  -- hint ที่จะกำกับท้ายโจทย์อัตโนมัติตอนแสดงผล (ไม่บังคับ) ดู problem_hints
+  hint_id SMALLINT REFERENCES problem_hints(id),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -74,6 +100,9 @@ CREATE INDEX IF NOT EXISTS topics_active_sort_idx
 CREATE INDEX IF NOT EXISTS problem_templates_lookup_idx
   ON problem_templates (topic_id, level_id, is_active);
 
+CREATE INDEX IF NOT EXISTS problem_templates_hint_idx
+  ON problem_templates (hint_id);
+
 CREATE INDEX IF NOT EXISTS problem_variants_template_idx
   ON problem_variants (problem_template_id, is_active);
 
@@ -95,6 +124,11 @@ FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 DROP TRIGGER IF EXISTS levels_set_updated_at ON levels;
 CREATE TRIGGER levels_set_updated_at
 BEFORE UPDATE ON levels
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+DROP TRIGGER IF EXISTS problem_hints_set_updated_at ON problem_hints;
+CREATE TRIGGER problem_hints_set_updated_at
+BEFORE UPDATE ON problem_hints
 FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 DROP TRIGGER IF EXISTS problem_templates_set_updated_at ON problem_templates;

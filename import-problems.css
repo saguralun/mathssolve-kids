@@ -223,6 +223,16 @@ button {
   grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.75fr) minmax(240px, 1fr);
 }
 
+.source-row {
+  margin-top: 12px;
+}
+
+.hints-row {
+  margin-top: 12px;
+  display: grid;
+  gap: 6px;
+}
+
 label {
   display: grid;
   gap: 5px;
@@ -230,6 +240,10 @@ label {
   color: #4d5b70;
   font-size: 0.86rem;
   font-weight: 850;
+}
+
+label[hidden] {
+  display: none;
 }
 
 input,

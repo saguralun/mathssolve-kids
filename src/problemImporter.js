@@ -25,8 +25,12 @@
   var fields = {
     topic: document.getElementById("topicSelect"),
     level: document.getElementById("levelSelect"),
-    code: document.getElementById("templateCodeInput")
+    code: document.getElementById("templateCodeInput"),
+    source: document.getElementById("sourceInput"),
+    answerDecimalPlaces: document.getElementById("answerDecimalPlacesInput"),
+    hint: document.getElementById("hintSelect")
   };
+  var sourceOptions = document.getElementById("sourceOptions");
 
   var fallbackTopics = [
     {
@@ -103,11 +107,15 @@
   var maxVariantCount = 5;
   var topics = fallbackTopics.slice();
   var levels = fallbackLevels.slice();
+  var sources = [];
+  var hints = [];
   var state = createBlankState();
   var refreshTimer = 0;
   var codeRequestId = 0;
 
   populateOptions(topics, levels);
+  populateSources(sources);
+  populateHints(hints);
   renderAll();
   bindEvents();
   loadOptions();
@@ -178,9 +186,7 @@
     templatePasteButton.addEventListener("click", handleTemplatePaste);
 
     resetFormButton.addEventListener("click", function () {
-      state = createBlankState();
-      refreshTemplateCode();
-      renderAll();
+      resetForm();
       setResult("ล้างฟอร์มแล้ว เริ่มด้วย part ว่าง 3 แถว", "");
     });
 
@@ -188,6 +194,20 @@
       event.preventDefault();
       importProblem();
     });
+  }
+
+  function resetForm() {
+    state = createBlankState();
+    templatePasteInput.value = "";
+    bulkPasteInput.value = "";
+    fields.source.value = "";
+    fields.answerDecimalPlaces.value = "0";
+    fields.hint.value = "";
+    fields.topic.value = "";
+    fields.level.value = "";
+    updateTopicDetail();
+    refreshTemplateCode();
+    renderAll();
   }
 
   async function loadOptions() {
@@ -202,6 +222,16 @@
         levels = data.levels;
       }
 
+      if (Array.isArray(data.sources)) {
+        sources = data.sources;
+        populateSources(sources);
+      }
+
+      if (Array.isArray(data.hints)) {
+        hints = data.hints;
+        populateHints(hints);
+      }
+
       populateOptions(topics, levels);
       setNotice("อ่าน topic และ level จาก PostgreSQL แล้ว", "success");
     } catch (error) {
@@ -214,10 +244,17 @@
   }
 
   function populateOptions(nextTopics, nextLevels) {
-    var selectedTopic = fields.topic.value || (nextTopics[0] ? nextTopics[0].code : "");
-    var selectedLevel = fields.level.value || (nextLevels[0] ? String(nextLevels[0].id) : "1");
+    // Keep whatever the user already picked; otherwise leave it BLANK rather
+    // than silently defaulting to the first topic/level. A silent default
+    // looks identical to a deliberate choice, so a rushed import can go in
+    // under the wrong topic/level without anyone noticing (happened once
+    // already) — a blank selection instead trips the "ต้องกรอกเรื่อง" /
+    // "ระดับความยากต้องอยู่ระหว่าง 1-5" required-field check on submit.
+    var selectedTopic = fields.topic.value || "";
+    var selectedLevel = fields.level.value || "";
 
     fields.topic.innerHTML = "";
+    fields.topic.appendChild(placeholderOption("-- เลือกเรื่อง --"));
     nextTopics.forEach(function (topic) {
       var option = document.createElement("option");
       option.value = topic.code;
@@ -226,6 +263,7 @@
     });
 
     fields.level.innerHTML = "";
+    fields.level.appendChild(placeholderOption("-- เลือกระดับความยาก --"));
     nextLevels.forEach(function (level) {
       var option = document.createElement("option");
       option.value = String(level.id);
@@ -236,17 +274,52 @@
     fields.topic.value = selectedTopic;
     fields.level.value = selectedLevel;
 
-    if (!fields.topic.value && nextTopics[0]) {
-      fields.topic.value = nextTopics[0].code;
-    }
-
-    if (!fields.level.value && nextLevels[0]) {
-      fields.level.value = String(nextLevels[0].id);
-    }
-
     updateTopicDetail();
     refreshTemplateCode();
     refreshGeneratedOutput();
+  }
+
+  // nextSources is a plain list of distinct source_name strings already used
+  // in problem_templates (server-side DISTINCT) — this is just an
+  // autocomplete hint, not a fixed list: the field stays free text, so
+  // typing anything not in here still works fine.
+  function populateSources(nextSources) {
+    sourceOptions.innerHTML = "";
+    nextSources.forEach(function (name) {
+      var option = document.createElement("option");
+      option.value = name;
+      sourceOptions.appendChild(option);
+    });
+  }
+
+  function populateHints(nextHints) {
+    var selectedHint = fields.hint.value || "";
+
+    fields.hint.innerHTML = "";
+    fields.hint.appendChild(placeholderOption("-- ไม่ระบุ --"));
+    nextHints.forEach(function (hint) {
+      var option = document.createElement("option");
+      option.value = String(hint.id);
+      option.textContent = hint.hintText;
+      fields.hint.appendChild(option);
+    });
+
+    fields.hint.value = selectedHint;
+  }
+
+  function findHintById(id) {
+    return (
+      hints.find(function (hint) {
+        return hint.id === id;
+      }) || null
+    );
+  }
+
+  function placeholderOption(label) {
+    var option = document.createElement("option");
+    option.value = "";
+    option.textContent = label;
+    return option;
   }
 
   function renderAll() {
@@ -641,7 +714,9 @@
 
   function refreshGeneratedOutput() {
     var templateText = buildPromptTemplate();
-    var promptText = buildPromptForSet(state.activeSet);
+    var decimalPlaces = Number(fields.answerDecimalPlaces.value) || 0;
+    var promptText =
+      buildPromptForSet(state.activeSet) + allHintsPreviewText(decimalPlaces, Number(fields.hint.value) || null);
 
     promptTemplatePreview.value = templateText;
     currentPromptPreview.value = promptText;
@@ -659,6 +734,8 @@
 
   function renderGeneratedList(payload) {
     generatedList.innerHTML = "";
+    var decimalPlaces = payload.template.answerDecimalPlaces;
+    var hintId = payload.template.hintId;
 
     payload.variants.forEach(function (variant) {
       var item = document.createElement("article");
@@ -670,7 +747,7 @@
       badge.className = "generated-badge";
       badge.textContent = "ชุด " + variant.variantNo;
       question.className = "generated-question";
-      question.textContent = buildPromptForSet(variant.variantNo - 1);
+      question.textContent = buildPromptForSet(variant.variantNo - 1) + allHintsPreviewText(decimalPlaces, hintId);
       answer.className = "generated-answer";
       answer.textContent = "ตอบ " + variant.variantValues.answer;
 
@@ -709,11 +786,12 @@
 
     try {
       var result = await postJson("/api/problems/import", payload);
+      resetForm();
       setResult(
-        "import แล้ว: " + result.templateCode + " พร้อมชุดตัวเลข " + result.variantCount + " ชุด",
+        "import แล้ว: " + result.templateCode + " พร้อมชุดตัวเลข " + result.variantCount +
+          " ชุด — ล้างฟอร์มให้แล้ว กันกด import ซ้ำ",
         "success"
       );
-      refreshGeneratedOutput();
     } catch (error) {
       setResult(friendlyError(error.message), "error");
     } finally {
@@ -727,7 +805,10 @@
       code: required(fields.code.value, "รหัสโจทย์แม่"),
       topicCode: required(fields.topic.value, "เรื่อง"),
       levelId: Number(required(fields.level.value, "ระดับความยาก")),
-      promptTemplateTh: templateText
+      promptTemplateTh: templateText,
+      sourceName: fields.source.value.trim(),
+      answerDecimalPlaces: Number(fields.answerDecimalPlaces.value) || 0,
+      hintId: fields.hint.value ? Number(fields.hint.value) : null
     };
 
     var variants = [];
@@ -756,6 +837,23 @@
       })
       .join("")
       .trim();
+  }
+
+  // Mirrors the practice screen's auto-appended hint (src/app.js) so what
+  // you see in this preview matches what the child actually sees — the
+  // hint is never typed into the prompt text itself.
+  function decimalHintText(decimalPlaces) {
+    var places = Number(decimalPlaces) || 0;
+    if (!places) {
+      return "";
+    }
+    return " (ตอบเป็นทศนิยม " + places + " ตำแหน่ง)";
+  }
+
+  function allHintsPreviewText(decimalPlaces, hintId) {
+    var hint = hintId ? findHintById(hintId) : null;
+    var hintText = hint ? " (" + hint.hintText + ")" : "";
+    return hintText + decimalHintText(decimalPlaces);
   }
 
   function buildPromptForSet(setIndex) {
@@ -796,9 +894,16 @@
 
   async function refreshTemplateCode() {
     var requestId = codeRequestId + 1;
+    codeRequestId = requestId;
+
+    if (!fields.topic.value || !fields.level.value) {
+      fields.code.value = "";
+      refreshGeneratedOutput();
+      return;
+    }
+
     var fallbackCode = buildFallbackTemplateCode();
 
-    codeRequestId = requestId;
     fields.code.value = fallbackCode;
     refreshGeneratedOutput();
 
@@ -856,21 +961,23 @@
       "  code,",
       "  topic_code,",
       "  level_id,",
-      "  prompt_template_th",
+      "  prompt_template_th,",
+      "  source_name",
       ") AS (",
       "  VALUES",
       "    (",
       "      " + sqlString(template.code) + ",",
       "      " + sqlString(template.topicCode) + ",",
       "      " + template.levelId + ",",
-      "      " + sqlString(template.promptTemplateTh),
+      "      " + sqlString(template.promptTemplateTh) + ",",
+      "      " + (template.sourceName ? sqlString(template.sourceName) : "NULL"),
       "    )",
       ")",
       "INSERT INTO problem_templates (",
-      "  code, topic_id, level_id, prompt_template_th",
+      "  code, topic_id, level_id, prompt_template_th, source_name",
       ")",
       "SELECT",
-      "  tr.code, t.id, tr.level_id, tr.prompt_template_th",
+      "  tr.code, t.id, tr.level_id, tr.prompt_template_th, tr.source_name",
       "FROM template_rows tr",
       "JOIN topics t ON t.code = tr.topic_code",
       "JOIN levels l ON l.id = tr.level_id",
@@ -878,6 +985,7 @@
       "  topic_id = EXCLUDED.topic_id,",
       "  level_id = EXCLUDED.level_id,",
       "  prompt_template_th = EXCLUDED.prompt_template_th,",
+      "  source_name = EXCLUDED.source_name,",
       "  is_active = TRUE;",
       "",
       "WITH variant_rows (",

@@ -5,6 +5,8 @@
   var gradeLevels = masterData.gradeLevels || [];
   var difficultyLevels = masterData.difficultyLevels || [];
   var problemSubjects = masterData.problemSubjects || window.ProblemBank.categories;
+  var dbTopics = [];
+  var dbDeckByTopic = {};
   var problemCountOptions = masterData.problemCountOptions || [5, 10, 15, 20];
   var totalProblems = 10;
   var visibleProgressCount = 5;
@@ -24,6 +26,7 @@
   var lastPoint = null;
   var saveTimer = null;
   var answerDigits = defaultAnswerDigits();
+  var decimalPointNode = null;
   var problemTimer = null;
   var problemTimerStartedAt = 0;
   var problemElapsedSeconds = 0;
@@ -59,16 +62,25 @@
   var clearScratchButton = document.getElementById("clearScratchButton");
   var backToSetupButton = document.getElementById("backToSetupButton");
 
-  renderSetupControls();
   bindSetupEvents();
   renderAnswerSheet();
-  restorePracticeConfig();
-  updateSetupControls();
-  openInitialScreen();
+  bootstrap();
+
+  // Waits for the DB-backed topics to load before the setup screen renders
+  // and restores the saved config — otherwise a previously-selected DB
+  // topic would fail its "does this category still exist" check (dbTopics
+  // is still empty at that point) and silently reset to "addition".
+  async function bootstrap() {
+    await loadDbTopics();
+    renderSetupControls();
+    restorePracticeConfig();
+    updateSetupControls();
+    openInitialScreen();
+  }
 
   function renderSetupControls() {
     categoryOptions.innerHTML = "";
-    problemSubjects.forEach(function (category) {
+    allCategories().forEach(function (category) {
       var button = document.createElement("button");
       var symbol = document.createElement("span");
       var label = document.createElement("span");
@@ -289,7 +301,7 @@
   }
 
   function selectedCategoryLabel() {
-    var category = problemSubjects.find(function (item) {
+    var category = allCategories().find(function (item) {
       return item.id === selectedCategory;
     });
     return category ? category.label : "บวก";
@@ -313,10 +325,14 @@
   }
 
   function normalizeCategory(categoryId) {
-    var exists = problemSubjects.some(function (category) {
+    var exists = allCategories().some(function (category) {
       return category.id === categoryId;
     });
     return exists ? categoryId : "addition";
+  }
+
+  function allCategories() {
+    return problemSubjects.concat(dbTopics);
   }
 
   function normalizeGradeCode(gradeCode) {
@@ -356,8 +372,7 @@
   }
 
   function createProblemSet() {
-    var generatorLevel = generatorLevelForLearningLevel(selectedLearningLevel);
-
+    dbDeckByTopic = {};
     currentProblemIndex = 0;
     problems = [];
     answersByProblem = [];
@@ -365,13 +380,163 @@
     elapsedSecondsByProblem = [];
 
     for (var index = 0; index < totalProblems; index += 1) {
-      problems.push(window.ProblemBank.generate(selectedCategory, generatorLevel));
+      problems.push(generateOneProblem(pickGenerationCategory()));
       answersByProblem.push(defaultAnswerDigits());
       submittedByProblem.push(false);
       elapsedSecondsByProblem.push(0);
     }
 
     saveProblemSet();
+  }
+
+  // In "random" mode, roll a fresh real category per problem instead of
+  // generating every problem in the set from the same one — that way a
+  // random set actually mixes topics question to question. The pool covers
+  // both the built-in generator categories and any topics imported into
+  // PostgreSQL (dbTopics).
+  function pickGenerationCategory() {
+    if (selectedCategory === "random_db") {
+      if (!dbTopics.length) {
+        return "addition";
+      }
+      return dbTopics[Math.floor(Math.random() * dbTopics.length)].id;
+    }
+
+    if (selectedCategory !== "random") {
+      return selectedCategory;
+    }
+
+    var realCategories = allCategories().filter(function (category) {
+      return category.id !== "random" && category.id !== "random_db";
+    });
+
+    if (!realCategories.length) {
+      return "addition";
+    }
+
+    return realCategories[Math.floor(Math.random() * realCategories.length)].id;
+  }
+
+  function generateOneProblem(categoryId) {
+    var dbTopic = findDbTopic(categoryId);
+
+    if (dbTopic) {
+      return generateDbProblem(dbTopic);
+    }
+
+    return window.ProblemBank.generate(categoryId, generatorLevelForLearningLevel(selectedLearningLevel));
+  }
+
+  function findDbTopic(categoryId) {
+    return (
+      dbTopics.find(function (topic) {
+        return topic.id === categoryId;
+      }) || null
+    );
+  }
+
+  // Draws the next (template, variant) pair from this topic's shuffled deck
+  // for the current session instead of rolling independently every time —
+  // independent rolls can repeat the same pair while others never show up
+  // at all. The deck holds every template x variant combo once, so a set
+  // the same size as (or smaller than) the deck never repeats a single one;
+  // only once the deck runs out does it reshuffle and start a new lap.
+  function generateDbProblem(dbTopic) {
+    var deck = dbDeckByTopic[dbTopic.id];
+
+    if (!deck || !deck.length) {
+      deck = shuffleArray(buildDbComboDeck(dbTopic));
+      dbDeckByTopic[dbTopic.id] = deck;
+    }
+
+    var combo = deck.pop();
+    var variantValues = (combo.variant && combo.variant.variantValues) || {};
+
+    return {
+      category: dbTopic.id,
+      categoryLabel: dbTopic.label,
+      title: dbTopic.label,
+      prompt: renderDbPromptTemplate(combo.template.promptTemplateTh, variantValues),
+      expression: "",
+      mode: "fraction",
+      answerKind: "number",
+      answer: variantValues.answer,
+      answerDecimalPlaces: Number(combo.template.answerDecimalPlaces) || 0,
+      appendedHint: combo.template.hintText || "",
+      hint: "",
+      visual: null
+    };
+  }
+
+  // Picks templates matching the current 1-5 difficulty (they map 1:1 onto
+  // the levels table) when any exist for this topic, otherwise falls back
+  // to every level so a topic with only one imported level still works at
+  // every difficulty setting. Every variant of every matching template
+  // becomes one card in the deck.
+  function buildDbComboDeck(dbTopic) {
+    var matchingLevel = dbTopic.templates.filter(function (template) {
+      return template.levelId === selectedLearningLevel;
+    });
+    var pool = matchingLevel.length ? matchingLevel : dbTopic.templates;
+    var combos = [];
+
+    pool.forEach(function (template) {
+      var variants = Array.isArray(template.variants) ? template.variants : [];
+      variants.forEach(function (variant) {
+        combos.push({ template: template, variant: variant });
+      });
+    });
+
+    return combos;
+  }
+
+  function shuffleArray(list) {
+    for (var index = list.length - 1; index > 0; index -= 1) {
+      var swapIndex = Math.floor(Math.random() * (index + 1));
+      var temp = list[index];
+      list[index] = list[swapIndex];
+      list[swapIndex] = temp;
+    }
+    return list;
+  }
+
+  function renderDbPromptTemplate(template, variantValues) {
+    return String(template || "").replace(/\{(\w+)\}/g, function (match, key) {
+      return Object.prototype.hasOwnProperty.call(variantValues, key) ? String(variantValues[key]) : match;
+    });
+  }
+
+  async function loadDbTopics() {
+    try {
+      var response = await fetch("/api/practice/problems");
+
+      if (!response.ok) {
+        return;
+      }
+
+      var data = await response.json();
+      var templates = Array.isArray(data.templates) ? data.templates : [];
+      var byTopic = {};
+
+      templates.forEach(function (template) {
+        if (!byTopic[template.topicCode]) {
+          byTopic[template.topicCode] = {
+            id: template.topicCode,
+            label: template.topicName,
+            short: "📥",
+            isDbTopic: true,
+            templates: []
+          };
+        }
+        byTopic[template.topicCode].templates.push(template);
+      });
+
+      dbTopics = Object.keys(byTopic).map(function (code) {
+        return byTopic[code];
+      });
+    } catch (error) {
+      dbTopics = [];
+    }
   }
 
   function showProblem(index) {
@@ -382,12 +547,16 @@
     currentProblemIndex = Math.max(0, Math.min(totalProblems - 1, index));
     answerDigits = answersByProblem[currentProblemIndex].slice();
 
+    var currentProblem = problems[currentProblemIndex];
+    var decimalPlaces = currentAnswerDecimalPlaces();
+
     problemNumber.textContent = "ข้อที่ " + (currentProblemIndex + 1);
-    problemText.textContent = problems[currentProblemIndex].prompt;
+    problemText.textContent = currentProblem.prompt + appendedHintText(currentProblem) + decimalHintText(decimalPlaces);
     submitStatus.textContent = submittedByProblem[currentProblemIndex]
-      ? "ส่งคำตอบ " + answerDigits.join("") + " แล้ว"
+      ? "ส่งคำตอบ " + formatAnswerDigits(answerDigits, decimalPlaces) + " แล้ว"
       : "";
 
+    positionDecimalPoint(decimalPlaces);
     updateAnswerSheet();
     renderProgress();
     updateProblemNavigation();
@@ -537,10 +706,7 @@
         if (problem && typeof problem.prompt === "string") {
           return problem;
         }
-        return window.ProblemBank.generate(
-          selectedCategory,
-          generatorLevelForLearningLevel(selectedLearningLevel)
-        );
+        return generateOneProblem(pickGenerationCategory());
       });
       answersByProblem = normalizeAnswers(saved.answers);
       submittedByProblem = normalizeBooleanList(saved.submitted);
@@ -626,6 +792,11 @@
       answerDisplay.appendChild(slot);
     }
 
+    decimalPointNode = document.createElement("span");
+    decimalPointNode.className = "answer-decimal-point";
+    decimalPointNode.textContent = ".";
+    decimalPointNode.setAttribute("aria-hidden", "true");
+
     for (var digit = 0; digit <= 9; digit += 1) {
       for (var answerColumn = 0; answerColumn < 5; answerColumn += 1) {
         var bubble = document.createElement("button");
@@ -639,6 +810,25 @@
         answerBubbleGrid.appendChild(bubble);
       }
     }
+  }
+
+  // Moves the "." marker in front of the answer-display slot where the
+  // decimal part starts (e.g. decimalPlaces 1 -> before the 5th slot),
+  // or removes it entirely for a whole-number answer. Called once per
+  // problem shown, since decimalPlaces can differ question to question
+  // (e.g. in a random-mixed set).
+  function positionDecimalPoint(decimalPlaces) {
+    if (decimalPointNode.parentNode) {
+      decimalPointNode.parentNode.removeChild(decimalPointNode);
+    }
+
+    if (!decimalPlaces) {
+      return;
+    }
+
+    var slots = answerDisplay.querySelectorAll(".answer-slot");
+    var beforeSlot = slots[slots.length - decimalPlaces];
+    answerDisplay.insertBefore(decimalPointNode, beforeSlot || null);
   }
 
   function selectAnswerDigit(event) {
@@ -662,7 +852,10 @@
   }
 
   function updateAnswerSheet() {
-    Array.prototype.forEach.call(answerDisplay.children, function (slot, index) {
+    // Iterate .answer-slot specifically, not answerDisplay.children — the
+    // decimal-point marker also lives in answerDisplay once a decimal-answer
+    // problem positions it, and it isn't one of the 5 digit slots.
+    Array.prototype.forEach.call(answerDisplay.querySelectorAll(".answer-slot"), function (slot, index) {
       slot.textContent = answerDigits[index];
       slot.classList.toggle("filled", answerDigits[index] !== "");
     });
@@ -678,8 +871,46 @@
     return ["0", "0", "0", "0", "0"];
   }
 
+  // 0 for every built-in-generated problem (always whole-number answers);
+  // DB-sourced problems carry whatever answer_decimal_places the template
+  // was imported with.
+  function currentAnswerDecimalPlaces() {
+    var problem = problems[currentProblemIndex];
+    var places = Math.floor(Number(problem && problem.answerDecimalPlaces));
+    return Number.isFinite(places) ? Math.max(0, Math.min(4, places)) : 0;
+  }
+
+  // Appended to the prompt automatically so importing a decimal-answer
+  // problem never requires typing the instruction into the question text
+  // itself — it always matches whatever answer_decimal_places says.
+  function decimalHintText(decimalPlaces) {
+    if (!decimalPlaces) {
+      return "";
+    }
+    return " (ตอบเป็นทศนิยม " + decimalPlaces + " ตำแหน่ง)";
+  }
+
+  // Same idea as decimalHintText, for a template's optional problem_hints
+  // row (e.g. "กำหนดให้ π ≈ 22/7") — auto-appended, never typed into the
+  // prompt itself. Built-in ProblemBank problems never carry one.
+  function appendedHintText(problem) {
+    var hintText = problem && problem.appendedHint;
+    return hintText ? " (" + hintText + ")" : "";
+  }
+
+  // Inserts "." into the 5-digit answer string at the right spot, e.g.
+  // digits ["0","0","0","0","1"] with decimalPlaces 1 -> "0000.1".
+  function formatAnswerDigits(digits, decimalPlaces) {
+    var joined = digits.join("");
+    if (!decimalPlaces) {
+      return joined;
+    }
+    var splitAt = joined.length - decimalPlaces;
+    return joined.slice(0, splitAt) + "." + joined.slice(splitAt);
+  }
+
   function submitAnswer() {
-    var answer = answerDigits.join("");
+    var answer = formatAnswerDigits(answerDigits, currentAnswerDecimalPlaces());
     var nextUnsubmittedProblem = -1;
 
     stopProblemTimer();

@@ -61,6 +61,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "GET" && requestUrl.pathname === "/api/practice/problems") {
+      await handlePracticeProblems(request, response);
+      return;
+    }
+
     if (request.method === "GET" && requestUrl.pathname === "/api/problems/next-code") {
       await handleProblemNextCode(request, response, requestUrl);
       return;
@@ -242,12 +247,69 @@ async function handleProblemOptions(request, response) {
           WHERE is_active = TRUE
         ),
         '[]'::json
+      ),
+      'sources',
+      COALESCE(
+        (
+          SELECT json_agg(DISTINCT source_name ORDER BY source_name)
+          FROM problem_templates
+          WHERE source_name IS NOT NULL AND source_name <> ''
+        ),
+        '[]'::json
+      ),
+      'hints',
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object('id', id, 'code', code, 'hintText', hint_text)
+            ORDER BY sort_order, id
+          )
+          FROM problem_hints
+          WHERE is_active = TRUE
+        ),
+        '[]'::json
       )
     )::text;
   `;
 
   const options = JSON.parse(await runPsql(connection, sql));
   sendJson(response, 200, options);
+}
+
+async function handlePracticeProblems(request, response) {
+  const connection = normalizeConnection();
+  const sql = `
+    SELECT COALESCE(
+      json_agg(
+        json_build_object(
+          'templateId', pt.id,
+          'code', pt.code,
+          'topicCode', t.code,
+          'topicName', t.name_th,
+          'levelId', pt.level_id,
+          'promptTemplateTh', pt.prompt_template_th,
+          'answerDecimalPlaces', pt.answer_decimal_places,
+          'hintText', ph.hint_text,
+          'variants', (
+            SELECT COALESCE(json_agg(json_build_object('variantNo', pv.variant_no, 'variantValues', pv.variant_values)), '[]'::json)
+            FROM problem_variants pv
+            WHERE pv.problem_template_id = pt.id
+              AND pv.is_active = TRUE
+          )
+        )
+        ORDER BY t.sort_order, pt.level_id, pt.code
+      ),
+      '[]'::json
+    )::text
+    FROM problem_templates pt
+    JOIN topics t ON t.id = pt.topic_id
+    LEFT JOIN problem_hints ph ON ph.id = pt.hint_id AND ph.is_active = TRUE
+    WHERE pt.is_active = TRUE
+      AND t.is_active = TRUE;
+  `;
+
+  const templates = JSON.parse(await runPsql(connection, sql));
+  sendJson(response, 200, { templates });
 }
 
 async function handleProblemNextCode(request, response, requestUrl) {
@@ -310,7 +372,16 @@ function normalizeProblemPayload(body) {
     code: requiredText(templateInput.code, "รหัสโจทย์แม่"),
     topicCode: requiredText(templateInput.topicCode, "เรื่อง"),
     levelId: clampInteger(templateInput.levelId, 1, 5, 0),
-    promptTemplateTh: requiredText(templateInput.promptTemplateTh, "โจทย์แม่")
+    promptTemplateTh: requiredText(templateInput.promptTemplateTh, "โจทย์แม่"),
+    // Optional free-text tag (TEDET, สสวท, ชื่อโรงเรียน, ...) — a problem with
+    // no known exam source just stays untagged (source_name NULL).
+    sourceName: optionalText(templateInput.sourceName),
+    // 0 = whole-number answer (unchanged default). 1-4 shifts the decimal
+    // point that many places in from the right of the 5-digit answer sheet.
+    answerDecimalPlaces: clampInteger(templateInput.answerDecimalPlaces, 0, 4, 0),
+    // At most one problem_hints row (e.g. "กำหนดให้ π ≈ 22/7") auto-appended
+    // to the prompt at render time — never typed into promptTemplateTh.
+    hintId: clampInteger(templateInput.hintId, 1, 32767, 0) || null
   };
 
   if (!template.levelId) {
@@ -401,20 +472,29 @@ function buildProblemImportSql(problem) {
         ${sqlString(template.code)}::text AS code,
         ${sqlString(template.topicCode)}::text AS topic_code,
         ${template.levelId}::smallint AS level_id,
-        ${sqlString(template.promptTemplateTh)}::text AS prompt_template_th
+        ${sqlString(template.promptTemplateTh)}::text AS prompt_template_th,
+        ${template.sourceName ? `${sqlString(template.sourceName)}::text` : "NULL::text"} AS source_name,
+        ${template.answerDecimalPlaces}::smallint AS answer_decimal_places,
+        ${template.hintId ? `${template.hintId}::smallint` : "NULL::smallint"} AS hint_id
     ),
     upsert_template AS (
       INSERT INTO problem_templates (
         code,
         topic_id,
         level_id,
-        prompt_template_th
+        prompt_template_th,
+        source_name,
+        answer_decimal_places,
+        hint_id
       )
       SELECT
         it.code,
         t.id,
         l.id,
-        it.prompt_template_th
+        it.prompt_template_th,
+        it.source_name,
+        it.answer_decimal_places,
+        it.hint_id
       FROM incoming_template it
       JOIN topics t ON t.code = it.topic_code
       JOIN levels l ON l.id = it.level_id
@@ -422,6 +502,9 @@ function buildProblemImportSql(problem) {
         topic_id = EXCLUDED.topic_id,
         level_id = EXCLUDED.level_id,
         prompt_template_th = EXCLUDED.prompt_template_th,
+        source_name = EXCLUDED.source_name,
+        answer_decimal_places = EXCLUDED.answer_decimal_places,
+        hint_id = EXCLUDED.hint_id,
         is_active = TRUE
       RETURNING id, code
     ),
@@ -450,6 +533,7 @@ function buildProblemImportSql(problem) {
       RETURNING id
     )
     SELECT json_build_object(
+      'templateId', (SELECT id FROM upsert_template),
       'templateCode', ${sqlString(template.code)},
       'templateCount', (SELECT COUNT(*) FROM upsert_template),
       'variantCount', (SELECT COUNT(*) FROM upsert_variants)

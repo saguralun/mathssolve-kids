@@ -68,6 +68,18 @@
         label: "การวัด / แปลงหน่วย",
         short: "ซม.",
         description: "ความยาว น้ำหนัก ปริมาตร และการแปลงหน่วย"
+      },
+      {
+        id: "random",
+        label: "สุ่มทุกเรื่อง",
+        short: "🎲",
+        description: "สุ่มเรื่องใหม่ทุกข้อจากทุกเรื่องที่มี ทั้งเรื่องเดิมและเรื่องที่ import เข้า PostgreSQL"
+      },
+      {
+        id: "random_db",
+        label: "สุ่มเฉพาะที่เพิ่มเอง",
+        short: "📥",
+        description: "สุ่มเฉพาะโจทย์ที่ import เข้า PostgreSQL เอง ไม่ปนโจทย์เดิมของระบบ"
       }
     ],
     gradeLevels: [
