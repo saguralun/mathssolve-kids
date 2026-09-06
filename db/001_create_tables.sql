@@ -76,6 +76,12 @@ CREATE TABLE IF NOT EXISTS problem_templates (
     CHECK (answer_decimal_places BETWEEN 0 AND 4),
   -- hint ที่จะกำกับท้ายโจทย์อัตโนมัติตอนแสดงผล (ไม่บังคับ) ดู problem_hints
   hint_id SMALLINT REFERENCES problem_hints(id),
+  -- รูปประกอบ (ไม่บังคับ) — วาดเป็น SVG จากตัวแปร diagramA/diagramB/diagramC
+  -- ใน variant_values ตอนแสดงผล ไม่ใช่ไฟล์รูปอัปโหลด เพราะแต่ละ variant มี
+  -- ตัวเลขไม่เหมือนกัน รูปเดียวที่มีเลขติดตายตัวจะใช้ซ้ำข้ามชุดตัวเลขไม่ได้
+  -- ค่าที่รองรับตอนนี้: 'box' (กล่อง/ทรงสี่เหลี่ยมมุมฉาก) — เพิ่มชนิดใหม่ได้
+  -- ทีหลังโดยขยาย CHECK นี้คู่กับโค้ดวาดรูปฝั่ง src/app.js
+  diagram_type TEXT CHECK (diagram_type IS NULL OR diagram_type IN ('box')),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

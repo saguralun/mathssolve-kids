@@ -28,7 +28,8 @@
     code: document.getElementById("templateCodeInput"),
     source: document.getElementById("sourceInput"),
     answerDecimalPlaces: document.getElementById("answerDecimalPlacesInput"),
-    hint: document.getElementById("hintSelect")
+    hint: document.getElementById("hintSelect"),
+    diagramType: document.getElementById("diagramTypeSelect")
   };
   var sourceOptions = document.getElementById("sourceOptions");
 
@@ -92,6 +93,12 @@
       nameTh: "จำนวนเต็ม",
       descriptionTh: "การบวก ลบ คูณ หารจำนวนเต็ม",
       gradeHint: "ม.1"
+    },
+    {
+      code: "linear_equations_two_variables",
+      nameTh: "ระบบสมการสองตัวแปร",
+      descriptionTh: "การตั้งสมการจากสถานการณ์ที่มีสองปริมาณและการแก้โจทย์ปัญหา",
+      gradeHint: "ม.1-ม.2"
     }
   ];
 
@@ -156,6 +163,8 @@
       scheduleRefresh();
     });
 
+    fields.diagramType.addEventListener("change", scheduleRefresh);
+
     importForm.addEventListener("input", function (event) {
       if (!event.target.closest("#partsList") && !event.target.closest("#variableTableBody")) {
         scheduleRefresh();
@@ -203,6 +212,7 @@
     fields.source.value = "";
     fields.answerDecimalPlaces.value = "0";
     fields.hint.value = "";
+    fields.diagramType.value = "";
     fields.topic.value = "";
     fields.level.value = "";
     updateTopicDetail();
@@ -345,12 +355,15 @@
       var actions = document.createElement("div");
       var removeButton = document.createElement("button");
 
-      row.className = "part-row";
+      var isRepeat = typeof part.linkedToPartIndex === "number";
+
+      row.className = "part-row" + (isRepeat ? " part-row-repeat" : "");
       row.dataset.index = String(index);
 
       indexNode.className = "part-index";
       indexNode.innerHTML =
-        "part " + (index + 1) + '<br /><span class="part-token">' + tokenForPart(index) + "</span>";
+        "part " + (index + 1) + '<br /><span class="part-token">' + tokenForPart(index) + "</span>" +
+        (isRepeat ? '<br /><span class="part-repeat-note">= part ' + (part.linkedToPartIndex + 1) + "</span>" : "");
 
       textLabelTitle.textContent = "โจทย์ part " + (index + 1);
       textInput.rows = 2;
@@ -361,8 +374,12 @@
 
       valueLabelTitle.textContent = "ค่า " + tokenForPart(index);
       valueInput.dataset.field = "value";
-      valueInput.value = part.values[0] || "";
+      valueInput.value = valuesForPart(part)[0] || "";
       valueInput.placeholder = "-";
+      if (isRepeat) {
+        valueInput.readOnly = true;
+        valueInput.title = "ใช้ค่าเดียวกับ part " + (part.linkedToPartIndex + 1) + " (ตัวแปรเดียวกัน)";
+      }
       valueLabel.appendChild(valueLabelTitle);
       valueLabel.appendChild(valueInput);
 
@@ -420,6 +437,11 @@
     variableTableHead.appendChild(headerRow);
 
     state.parts.forEach(function (part, partIndex) {
+      // A repeat shares its owner's row — showing it again would just be a
+      // second, confusing way to edit the exact same variable.
+      if (typeof part.linkedToPartIndex === "number") {
+        return;
+      }
       variableTableBody.appendChild(createVariableRow(part, partIndex));
     });
 
@@ -483,7 +505,7 @@
       state.parts[index].text = event.target.value;
     }
 
-    if (event.target.dataset.field === "value") {
+    if (event.target.dataset.field === "value" && typeof state.parts[index].linkedToPartIndex !== "number") {
       state.parts[index].values[0] = event.target.value;
       syncVariableInput(index, 0, event.target.value);
     }
@@ -501,6 +523,19 @@
     }
 
     state.parts.splice(index, 1);
+    // Keep any linkedToPartIndex pointers valid: shift references past the
+    // removed part down by one, and un-link anything that pointed at the
+    // part just removed (it becomes its own variable instead of dangling).
+    state.parts.forEach(function (part) {
+      if (typeof part.linkedToPartIndex !== "number") {
+        return;
+      }
+      if (part.linkedToPartIndex === index) {
+        delete part.linkedToPartIndex;
+      } else if (part.linkedToPartIndex > index) {
+        part.linkedToPartIndex -= 1;
+      }
+    });
     renderParts();
     renderVariableTable();
     refreshGeneratedOutput();
@@ -579,6 +614,11 @@
   // same part shape the manual "ตัวต่อโจทย์" builder uses: text-before-token
   // per variable part, plus one extra trailing part (no variable) for any
   // text left after the last token — e.g. "...มีค่าเท่ากับเท่าไร".
+  //
+  // A token that repeats (e.g. a name mentioned 3 times) does NOT get its
+  // own part — it's marked linkedToPartIndex pointing at the part that
+  // introduced it, so both share one value instead of the same name
+  // silently becoming several unrelated variables (math1, math7, math9, ...).
   function parseTemplateText(text) {
     var raw = String(text || "");
 
@@ -586,21 +626,33 @@
       throw new Error("วางข้อความโจทย์แม่ก่อน");
     }
 
-    var tokenPattern = /\{math\d+\}/g;
-    var segments = raw.split(tokenPattern);
-    var tokenCount = segments.length - 1;
+    var tokenPattern = /\{(\w+)\}/g;
+    var parts = [];
+    var ownerIndexByToken = {};
+    var lastIndex = 0;
+    var match;
 
-    if (tokenCount === 0) {
+    while ((match = tokenPattern.exec(raw)) !== null) {
+      var textBefore = raw.slice(lastIndex, match.index);
+      var tokenName = match[1];
+      var part = { text: textBefore, token: tokenName, values: createBlankValues() };
+
+      if (Object.prototype.hasOwnProperty.call(ownerIndexByToken, tokenName)) {
+        part.linkedToPartIndex = ownerIndexByToken[tokenName];
+      } else {
+        ownerIndexByToken[tokenName] = parts.length;
+      }
+
+      parts.push(part);
+      lastIndex = tokenPattern.lastIndex;
+    }
+
+    if (!parts.length) {
       return [{ text: raw, values: createBlankValues() }];
     }
 
-    var parts = [];
-    for (var index = 0; index < tokenCount; index += 1) {
-      parts.push({ text: segments[index], values: createBlankValues() });
-    }
-
-    var trailingText = segments[tokenCount];
-    if (trailingText && trailingText.trim() !== "") {
+    var trailingText = raw.slice(lastIndex);
+    if (trailingText.trim() !== "") {
       parts.push({ text: trailingText, values: createBlankValues() });
     }
 
@@ -675,35 +727,64 @@
       return 0;
     });
 
-    // Keep any sentence text already typed into existing parts, matched by
-    // position, so pasting new numbers doesn't wipe out the wording.
-    var previousTexts = state.parts.map(function (part) {
-      return part.text;
+    // If the parts already carry every key the JSON needs (typically because
+    // "แบ่ง part อัตโนมัติ" ran first), just fill values into the existing
+    // owning parts by their resolved token name — this is what preserves a
+    // repeated variable's linkedToPartIndex instead of flattening it back
+    // into separate math1/math7/math9-style variables.
+    var ownerIndexByToken = {};
+    state.parts.forEach(function (part, index) {
+      if (typeof part.linkedToPartIndex !== "number") {
+        ownerIndexByToken[tokenForPart(index)] = index;
+      }
     });
 
-    var newParts = mathKeys.map(function (key, index) {
-      return {
-        text: previousTexts[index] || "",
-        values: createBlankValues()
-      };
+    var hasAllKeys = mathKeys.every(function (key) {
+      return Object.prototype.hasOwnProperty.call(ownerIndexByToken, key);
     });
 
-    // Anything after the last variable part (e.g. a trailing "มีค่าเท่ากับ
-    // เท่าไร" part with no variable, from "แบ่ง part อัตโนมัติ") has no
-    // matching key in the pasted JSON — carry it over as-is instead of
-    // dropping it, so pasting values after pasting the template text doesn't
-    // eat the end of the sentence.
-    for (var index = mathKeys.length; index < state.parts.length; index += 1) {
-      newParts.push({ text: state.parts[index].text, values: createBlankValues() });
+    if (!hasAllKeys) {
+      // No matching structure yet (JSON pasted before any template text) —
+      // fall back to building one owning part per key, same as before.
+      // Keep any sentence text already typed into existing parts, matched by
+      // position, so pasting new numbers doesn't wipe out the wording.
+      var previousTexts = state.parts.map(function (part) {
+        return part.text;
+      });
+
+      var newParts = mathKeys.map(function (key, index) {
+        return {
+          text: previousTexts[index] || "",
+          values: createBlankValues()
+        };
+      });
+
+      // Anything after the last variable part (e.g. a trailing "มีค่าเท่ากับ
+      // เท่าไร" part with no variable, from "แบ่ง part อัตโนมัติ") has no
+      // matching key in the pasted JSON — carry it over as-is instead of
+      // dropping it, so pasting values after pasting the template text
+      // doesn't eat the end of the sentence.
+      for (var index = mathKeys.length; index < state.parts.length; index += 1) {
+        newParts.push({ text: state.parts[index].text, values: createBlankValues() });
+      }
+
+      state.parts = newParts;
+      ownerIndexByToken = {};
+      mathKeys.forEach(function (key, keyIndex) {
+        ownerIndexByToken[key] = keyIndex;
+      });
     }
 
-    state.parts = newParts;
     state.answer = { values: createBlankValues() };
     state.activeVariantCount = Math.max(1, count);
     state.activeSet = 0;
 
     objects.forEach(function (obj, setIndex) {
-      mathKeys.forEach(function (key, partIndex) {
+      mathKeys.forEach(function (key) {
+        var partIndex = ownerIndexByToken[key];
+        if (typeof partIndex !== "number" || !state.parts[partIndex]) {
+          return;
+        }
         state.parts[partIndex].values[setIndex] =
           obj[key] === undefined || obj[key] === null ? "" : String(obj[key]);
       });
@@ -808,7 +889,8 @@
       promptTemplateTh: templateText,
       sourceName: fields.source.value.trim(),
       answerDecimalPlaces: Number(fields.answerDecimalPlaces.value) || 0,
-      hintId: fields.hint.value ? Number(fields.hint.value) : null
+      hintId: fields.hint.value ? Number(fields.hint.value) : null,
+      diagramType: fields.diagramType.value || null
     };
 
     var variants = [];
@@ -860,7 +942,7 @@
     return state.parts
       .map(function (part) {
         var text = part.text || "";
-        return text + (partHasVariable(part) ? String(part.values[setIndex] || "") : "");
+        return text + (partHasVariable(part) ? String(valuesForPart(part)[setIndex] || "") : "");
       })
       .join("")
       .trim();
@@ -870,6 +952,12 @@
     var values = {};
 
     state.parts.forEach(function (part, index) {
+      // A repeat contributes nothing of its own — its owner already writes
+      // this same token's value below.
+      if (typeof part.linkedToPartIndex === "number") {
+        return;
+      }
+
       if (!partHasVariable(part)) {
         return;
       }
@@ -882,7 +970,7 @@
   }
 
   function partHasVariable(part) {
-    return part.values.some(function (value) {
+    return valuesForPart(part).some(function (value) {
       return String(value || "").trim() !== "";
     });
   }
@@ -1045,8 +1133,31 @@
     }
   }
 
+  // A part that repeats an earlier variable (e.g. a name mentioned twice)
+  // renders under that earlier part's token, not its own array position —
+  // otherwise the same {math1} appearing 3 times would end up as three
+  // different variables (math1, math7, math9) instead of one shared one.
+  // Parts parsed from pasted template text carry the literal name that was
+  // actually written (part.token, e.g. "math5") — position alone isn't
+  // enough once repeats interleave with new variables, since a variable's
+  // array index and its written number can drift apart (see parseTemplateText).
+  // Manually-added parts (the "+ เพิ่ม part" button, or the default 3 blank
+  // ones) never get a .token, so they keep the original positional fallback.
   function tokenForPart(index) {
-    return "math" + (index + 1);
+    var part = state.parts[index];
+    if (!part) {
+      return "math" + (index + 1);
+    }
+    var owner = typeof part.linkedToPartIndex === "number" ? state.parts[part.linkedToPartIndex] : part;
+    var ownerIndex = typeof part.linkedToPartIndex === "number" ? part.linkedToPartIndex : index;
+    return (owner && owner.token) || "math" + (ownerIndex + 1);
+  }
+
+  function valuesForPart(part) {
+    if (part && typeof part.linkedToPartIndex === "number") {
+      return state.parts[part.linkedToPartIndex].values;
+    }
+    return part.values;
   }
 
   function createBlankValues() {

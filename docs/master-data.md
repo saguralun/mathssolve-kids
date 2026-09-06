@@ -64,6 +64,7 @@ levels = ระดับความยาก 1-5
 | integers | จำนวนเต็ม | ม.1 |
 | exponents_scientific_notation | เลขยกกำลังและสัญกรณ์วิทยาศาสตร์ | ม.1 |
 | linear_equations_one_variable | สมการเชิงเส้นตัวแปรเดียว | ม.1 |
+| linear_equations_two_variables | ระบบสมการสองตัวแปร | ม.1-ม.2 |
 | linear_relations_graphs | กราฟและความสัมพันธ์เชิงเส้น | ม.1 |
 | statistics_intro | สถิติเบื้องต้น | ป.6, ม.1 |
 

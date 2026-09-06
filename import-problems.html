@@ -15,6 +15,7 @@
         </div>
         <nav class="admin-nav" aria-label="admin navigation">
           <a href="/">หน้าทำโจทย์</a>
+          <a href="/summary.html">สรุปโจทย์</a>
           <a href="/tables.html">ดู Table</a>
         </nav>
       </header>
@@ -32,7 +33,7 @@
             </div>
           </div>
 
-          <div class="form-grid three-columns">
+          <div class="form-grid four-columns">
             <label>
               <span>เรื่อง</span>
               <select id="topicSelect" name="topicCode" required></select>
@@ -45,29 +46,36 @@
               <span>รหัสโจทย์แม่ auto</span>
               <input id="templateCodeInput" name="templateCode" autocomplete="off" readonly required />
             </label>
+            <label>
+              <span>แหล่งที่มา (ไม่บังคับ)</span>
+              <input id="sourceInput" name="sourceName" list="sourceOptions" autocomplete="off" placeholder="เช่น TEDET, สสวท..." />
+              <datalist id="sourceOptions"></datalist>
+            </label>
           </div>
 
           <p class="field-note" id="topicDetail">เลือกเรื่องเพื่อจัดกลุ่มโจทย์</p>
 
           <div class="form-grid two-columns source-row">
             <label>
-              <span>แหล่งที่มา (ไม่บังคับ)</span>
-              <input id="sourceInput" name="sourceName" list="sourceOptions" autocomplete="off" placeholder="เช่น TEDET, สสวท, สอวน., ชื่อโรงเรียน..." />
-              <datalist id="sourceOptions"></datalist>
-            </label>
-            <label>
               <span>ทศนิยมของคำตอบ (ตำแหน่ง)</span>
               <input id="answerDecimalPlacesInput" name="answerDecimalPlaces" type="number" min="0" max="4" value="0" />
             </label>
-          </div>
-          <p class="field-note">0 = คำตอบเป็นจำนวนเต็ม (ค่าเริ่มต้น) — ใส่ 1 ถ้าคำตอบมีทศนิยม 1 ตำแหน่ง เช่น 9408 กับทศนิยม 1 ตำแหน่งจะแสดงเป็น 940.8 ในช่องตอบ 5 หลัก</p>
-
-          <div class="hints-row">
             <label>
               <span>Hint ท้ายโจทย์ (ไม่บังคับ)</span>
               <select id="hintSelect"></select>
             </label>
-            <p class="field-note">เลือกแล้วระบบจะเติมข้อความนี้ต่อท้ายโจทย์ให้เองตอนแสดงผล ไม่ต้องพิมพ์ลงในโจทย์แม่</p>
+          </div>
+          <p class="field-note">0 = คำตอบเป็นจำนวนเต็ม (ค่าเริ่มต้น) — ใส่ 1 ถ้าคำตอบมีทศนิยม 1 ตำแหน่ง เช่น 9408 กับทศนิยม 1 ตำแหน่งจะแสดงเป็น 940.8 ในช่องตอบ 5 หลัก — Hint เลือกแล้วระบบจะเติมข้อความต่อท้ายโจทย์ให้เองตอนแสดงผล ไม่ต้องพิมพ์ลงในโจทย์แม่</p>
+
+          <div class="hints-row">
+            <label>
+              <span>รูปประกอบ (ไม่บังคับ)</span>
+              <select id="diagramTypeSelect">
+                <option value="">-- ไม่มีรูป --</option>
+                <option value="box">กล่อง / ทรงสี่เหลี่ยมมุมฉาก</option>
+              </select>
+            </label>
+            <p class="field-note">วาดเป็นรูปอัตโนมัติจากตัวเลขจริง ไม่ใช่ไฟล์รูป — ใส่ตัวเลขกำกับรูปในตัวแปร <code>diagramA</code> (กว้าง), <code>diagramB</code> (ยาว), <code>diagramC</code> (สูง) ของแต่ละชุด ไม่ใส่ตัวไหนจะแสดงเป็น 0 เช่น <code>{"math1":"65","diagramA":"65","diagramB":"40","diagramC":"15","answer":"..."}</code></p>
           </div>
         </section>
 

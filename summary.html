@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MathsSolve Summary</title>
+    <link rel="stylesheet" href="summary.css" />
+  </head>
+  <body>
+    <main class="summary-shell">
+      <header class="summary-topbar">
+        <div>
+          <p>MathsSolve Admin</p>
+          <h1>สรุปโจทย์ในระบบ</h1>
+        </div>
+        <nav class="summary-nav" aria-label="admin navigation">
+          <a href="/">หน้าทำโจทย์</a>
+          <a href="/import-problems.html">Import โจทย์</a>
+          <a href="/tables.html">ดู Table</a>
+        </nav>
+      </header>
+
+      <section class="summary-cards" id="summaryCards" aria-label="สรุปภาพรวม"></section>
+
+      <section class="summary-panel">
+        <div class="summary-panel-heading">
+          <h2>เรื่อง × ระดับความยาก</h2>
+          <button class="link-button" id="refreshSummaryButton" type="button">↻ โหลดใหม่</button>
+        </div>
+        <div class="summary-message" id="summaryMessage">กำลังโหลดข้อมูลจาก PostgreSQL...</div>
+        <div class="summary-table-frame" id="summaryTableFrame" hidden>
+          <table class="summary-table" id="summaryTable"></table>
+        </div>
+      </section>
+    </main>
+
+    <script src="src/summaryViewer.js"></script>
+  </body>
+</html>

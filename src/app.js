@@ -45,6 +45,7 @@
   var setupSummary = document.getElementById("setupSummary");
   var problemNumber = document.getElementById("problemNumber");
   var problemText = document.getElementById("problemText");
+  var problemDiagram = document.getElementById("problemDiagram");
   var questionProgress = document.getElementById("questionProgress");
   var timerDisplay = document.getElementById("timerDisplay");
   var timerText = timerDisplay ? timerDisplay.querySelector("span") : null;
@@ -463,6 +464,8 @@
       answer: variantValues.answer,
       answerDecimalPlaces: Number(combo.template.answerDecimalPlaces) || 0,
       appendedHint: combo.template.hintText || "",
+      diagramType: combo.template.diagramType || null,
+      diagramValues: variantValues,
       hint: "",
       visual: null
     };
@@ -556,6 +559,7 @@
       ? "ส่งคำตอบ " + formatAnswerDigits(answerDigits, decimalPlaces) + " แล้ว"
       : "";
 
+    renderDiagram(currentProblem);
     positionDecimalPoint(decimalPlaces);
     updateAnswerSheet();
     renderProgress();
@@ -896,6 +900,63 @@
   function appendedHintText(problem) {
     var hintText = problem && problem.appendedHint;
     return hintText ? " (" + hintText + ")" : "";
+  }
+
+  // Drawn as SVG from the problem's own variant values (diagramA/diagramB)
+  // instead of an uploaded picture — a static image can't carry different
+  // numbers per variant, but the same shape re-labels itself correctly for
+  // whichever variant the deck happens to draw. Keep DIAGRAM_RENDERERS'
+  // keys in sync with the CHECK constraint on problem_templates.diagram_type
+  // (db/001_create_tables.sql) and normalizeDiagramType() in server.js.
+  var DIAGRAM_RENDERERS = {
+    box: buildBoxDiagramSvg
+  };
+
+  function renderDiagram(problem) {
+    var diagramType = problem && problem.diagramType;
+    var renderer = diagramType && DIAGRAM_RENDERERS[diagramType];
+
+    if (!renderer) {
+      problemDiagram.hidden = true;
+      problemDiagram.innerHTML = "";
+      return;
+    }
+
+    var values = problem.diagramValues || {};
+    problemDiagram.innerHTML = renderer(values.diagramA, values.diagramB, values.diagramC);
+    problemDiagram.hidden = false;
+  }
+
+  // diagramA = กว้าง (width, front-bottom edge), diagramB = ยาว (depth,
+  // the diagonal edge going back), diagramC = สูง (height, front-right
+  // vertical edge). A missing value shows "0" rather than an empty label —
+  // an unlabeled edge reads as "forgot to fill this in", not "this box only
+  // has 2 dimensions".
+  function buildBoxDiagramSvg(labelA, labelB, labelC) {
+    var textA = escapeSvgText(labelA);
+    var textB = escapeSvgText(labelB);
+    var textC = escapeSvgText(labelC);
+
+    return (
+      '<svg viewBox="0 0 240 150" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="แผนภาพกล่องสี่เหลี่ยมมุมฉาก กว้าง ยาว สูง">' +
+      '<polygon points="30,45 150,45 180,20 60,20" fill="var(--blue)" opacity="0.75" stroke="var(--ink)" stroke-width="1.5" stroke-linejoin="round" />' +
+      '<polygon points="150,45 180,20 180,80 150,105" fill="var(--blue-dark)" stroke="var(--ink)" stroke-width="1.5" stroke-linejoin="round" />' +
+      '<rect x="30" y="45" width="120" height="60" fill="var(--blue)" stroke="var(--ink)" stroke-width="1.5" />' +
+      '<text x="90" y="127" text-anchor="middle" font-size="15" font-weight="700" fill="var(--ink)">' + textA + "</text>" +
+      '<text x="185" y="16" text-anchor="middle" font-size="15" font-weight="700" fill="var(--ink)">' + textB + "</text>" +
+      '<text x="165" y="79" text-anchor="middle" font-size="15" font-weight="700" fill="var(--ink)">' + textC + "</text>" +
+      "</svg>"
+    );
+  }
+
+  function escapeSvgText(value) {
+    if (value === undefined || value === null || value === "") {
+      return "0";
+    }
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
   }
 
   // Inserts "." into the 5-digit answer string at the right spot, e.g.

@@ -66,6 +66,11 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    if (request.method === "GET" && requestUrl.pathname === "/api/problems/summary") {
+      await handleProblemSummary(request, response);
+      return;
+    }
+
     if (request.method === "GET" && requestUrl.pathname === "/api/problems/next-code") {
       await handleProblemNextCode(request, response, requestUrl);
       return;
@@ -290,6 +295,7 @@ async function handlePracticeProblems(request, response) {
           'promptTemplateTh', pt.prompt_template_th,
           'answerDecimalPlaces', pt.answer_decimal_places,
           'hintText', ph.hint_text,
+          'diagramType', pt.diagram_type,
           'variants', (
             SELECT COALESCE(json_agg(json_build_object('variantNo', pv.variant_no, 'variantValues', pv.variant_values)), '[]'::json)
             FROM problem_variants pv
@@ -310,6 +316,63 @@ async function handlePracticeProblems(request, response) {
 
   const templates = JSON.parse(await runPsql(connection, sql));
   sendJson(response, 200, { templates });
+}
+
+async function handleProblemSummary(request, response) {
+  const connection = normalizeConnection();
+  const sql = `
+    SELECT json_build_object(
+      'topics',
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object('id', id, 'code', code, 'nameTh', name_th, 'gradeHint', grade_hint)
+            ORDER BY sort_order, id
+          )
+          FROM topics
+          WHERE is_active = TRUE
+        ),
+        '[]'::json
+      ),
+      'levels',
+      COALESCE(
+        (
+          SELECT json_agg(json_build_object('id', id, 'nameTh', name_th) ORDER BY sort_order, id)
+          FROM levels
+          WHERE is_active = TRUE
+        ),
+        '[]'::json
+      ),
+      'counts',
+      COALESCE(
+        (
+          SELECT json_agg(
+            json_build_object(
+              'topicId', gc.topic_id,
+              'levelId', gc.level_id,
+              'templateCount', gc.template_count,
+              'variantCount', gc.variant_count
+            )
+          )
+          FROM (
+            SELECT
+              pt.topic_id,
+              pt.level_id,
+              COUNT(DISTINCT pt.id) AS template_count,
+              COUNT(pv.id) FILTER (WHERE pv.is_active) AS variant_count
+            FROM problem_templates pt
+            LEFT JOIN problem_variants pv ON pv.problem_template_id = pt.id
+            WHERE pt.is_active = TRUE
+            GROUP BY pt.topic_id, pt.level_id
+          ) gc
+        ),
+        '[]'::json
+      )
+    )::text;
+  `;
+
+  const summary = JSON.parse(await runPsql(connection, sql));
+  sendJson(response, 200, summary);
 }
 
 async function handleProblemNextCode(request, response, requestUrl) {
@@ -381,7 +444,12 @@ function normalizeProblemPayload(body) {
     answerDecimalPlaces: clampInteger(templateInput.answerDecimalPlaces, 0, 4, 0),
     // At most one problem_hints row (e.g. "กำหนดให้ π ≈ 22/7") auto-appended
     // to the prompt at render time — never typed into promptTemplateTh.
-    hintId: clampInteger(templateInput.hintId, 1, 32767, 0) || null
+    hintId: clampInteger(templateInput.hintId, 1, 32767, 0) || null,
+    // Drawn as SVG from diagramA/diagramB/diagramC in each variant's values
+    // (see src/app.js) rather than an uploaded picture — a static image
+    // can't carry different numbers per variant. Keep this list in sync
+    // with the CHECK constraint on problem_templates.diagram_type.
+    diagramType: normalizeDiagramType(templateInput.diagramType)
   };
 
   if (!template.levelId) {
@@ -475,7 +543,8 @@ function buildProblemImportSql(problem) {
         ${sqlString(template.promptTemplateTh)}::text AS prompt_template_th,
         ${template.sourceName ? `${sqlString(template.sourceName)}::text` : "NULL::text"} AS source_name,
         ${template.answerDecimalPlaces}::smallint AS answer_decimal_places,
-        ${template.hintId ? `${template.hintId}::smallint` : "NULL::smallint"} AS hint_id
+        ${template.hintId ? `${template.hintId}::smallint` : "NULL::smallint"} AS hint_id,
+        ${template.diagramType ? `${sqlString(template.diagramType)}::text` : "NULL::text"} AS diagram_type
     ),
     upsert_template AS (
       INSERT INTO problem_templates (
@@ -485,7 +554,8 @@ function buildProblemImportSql(problem) {
         prompt_template_th,
         source_name,
         answer_decimal_places,
-        hint_id
+        hint_id,
+        diagram_type
       )
       SELECT
         it.code,
@@ -494,7 +564,8 @@ function buildProblemImportSql(problem) {
         it.prompt_template_th,
         it.source_name,
         it.answer_decimal_places,
-        it.hint_id
+        it.hint_id,
+        it.diagram_type
       FROM incoming_template it
       JOIN topics t ON t.code = it.topic_code
       JOIN levels l ON l.id = it.level_id
@@ -505,6 +576,7 @@ function buildProblemImportSql(problem) {
         source_name = EXCLUDED.source_name,
         answer_decimal_places = EXCLUDED.answer_decimal_places,
         hint_id = EXCLUDED.hint_id,
+        diagram_type = EXCLUDED.diagram_type,
         is_active = TRUE
       RETURNING id, code
     ),
@@ -772,6 +844,16 @@ function requiredText(value, label) {
   }
 
   return text;
+}
+
+// Keep this list identical to the CHECK constraint on
+// problem_templates.diagram_type (db/001_create_tables.sql) and to the
+// switch in src/app.js's renderDiagram().
+const SUPPORTED_DIAGRAM_TYPES = ["box"];
+
+function normalizeDiagramType(value) {
+  const text = optionalText(value);
+  return SUPPORTED_DIAGRAM_TYPES.indexOf(text) === -1 ? null : text;
 }
 
 function optionalText(value) {

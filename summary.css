@@ -1,0 +1,243 @@
+:root {
+  color-scheme: light;
+  --bg: #eef7f5;
+  --ink: #142036;
+  --muted: #667085;
+  --blue: #2f6fed;
+  --blue-dark: #1f56c5;
+  --mint: #20b7a2;
+  --sun: #f5c542;
+  --border: #d7e1ec;
+  --soft-border: #edf2f7;
+  --surface: #ffffff;
+  --panel: #f8fbff;
+  --shadow: 0 18px 48px rgba(20, 32, 54, 0.12);
+  font-family:
+    "Noto Sans Thai", "Leelawadee UI", "Segoe UI", ui-sans-serif, system-ui,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  color: var(--ink);
+  background:
+    linear-gradient(135deg, rgba(32, 183, 162, 0.14), transparent 36%),
+    linear-gradient(225deg, rgba(245, 197, 66, 0.16), transparent 44%),
+    linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+}
+
+a {
+  color: var(--blue-dark);
+}
+
+.summary-shell {
+  display: grid;
+  gap: 16px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+}
+
+.summary-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 18px;
+  box-shadow: var(--shadow);
+}
+
+.summary-topbar p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.summary-topbar h1 {
+  margin: 2px 0 0;
+  font-size: 1.3rem;
+}
+
+.summary-nav {
+  display: flex;
+  gap: 14px;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.summary-nav a {
+  text-decoration: none;
+}
+
+.summary-nav a:hover {
+  text-decoration: underline;
+}
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.summary-card {
+  display: grid;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: var(--shadow);
+}
+
+.summary-card span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.summary-card strong {
+  font-size: 1.5rem;
+}
+
+.summary-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.summary-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.summary-panel-heading h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.link-button {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--blue-dark);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  text-decoration: underline;
+}
+
+.summary-message {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.summary-message.error {
+  color: #b42318;
+}
+
+.summary-table-frame {
+  overflow-x: auto;
+}
+
+table.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  white-space: nowrap;
+}
+
+table.summary-table th,
+table.summary-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--soft-border);
+  text-align: center;
+}
+
+table.summary-table th {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+}
+
+table.summary-table td.topic-name {
+  text-align: left;
+  white-space: normal;
+  min-width: 220px;
+  font-weight: 750;
+}
+
+table.summary-table td.topic-grade {
+  display: block;
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+table.summary-table td.total-cell {
+  font-weight: 900;
+  color: var(--blue-dark);
+}
+
+table.summary-table tr.topic-empty td.topic-name {
+  color: var(--muted);
+}
+
+.count-pill {
+  display: inline-flex;
+  min-width: 26px;
+  justify-content: center;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-weight: 850;
+}
+
+.count-pill.zero {
+  color: #a2acbd;
+  background: transparent;
+}
+
+.count-pill.has-data {
+  color: #0f7a5a;
+  background: rgba(32, 183, 162, 0.16);
+}
+
+tfoot td {
+  font-weight: 900;
+  background: var(--panel);
+}
+
+@media (max-width: 640px) {
+  table.summary-table td.topic-name {
+    min-width: 160px;
+  }
+}
